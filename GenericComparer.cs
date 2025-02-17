@@ -289,3 +289,48 @@ var oldUsers = new List<User> { /* ... */ };
 var newUsers = new List<User> { /* ... */ };
 
 var changes = ModelComparer.CompareLists(oldUsers, newUsers, config);
+---------
+public static ModelChangeSet CompareLists<T>(IEnumerable<T> oldList, IEnumerable<T> newList, ComparisonConfig config = null)
+{
+    config ??= new ComparisonConfig();
+    var changeSet = new ModelChangeSet();
+    
+    // Handle null lists by creating empty collections
+    var safeOldList = oldList ?? Enumerable.Empty<T>();
+    var safeNewList = newList ?? Enumerable.Empty<T>();
+
+    // Create dictionaries only if KeySelector is provided
+    Dictionary<object, T> oldDict = new Dictionary<object, T>();
+    Dictionary<object, T> newDict = new Dictionary<object, T>();
+
+    if (config.KeySelector != null)
+    {
+        oldDict = safeOldList.ToDictionary(
+            item => config.KeySelector(item), 
+            item => item);
+            
+        newDict = safeNewList.ToDictionary(
+            item => config.KeySelector(item), 
+            item => item);
+    }
+
+    var allKeys = new HashSet<object>(
+        oldDict.Keys
+            .Concat(newDict.Keys)
+            .Distinct());
+
+    foreach (var key in allKeys)
+    {
+        oldDict.TryGetValue(key, out T oldItem);
+        newDict.TryGetValue(key, out T newItem);
+
+        var differences = GetDifferences(oldItem, newItem, config);
+        if (differences.Count > 0)
+        {
+            changeSet.OldValues.Add(CreatePartialObject(oldItem, differences));
+            changeSet.NewValues.Add(CreatePartialObject(newItem, differences));
+        }
+    }
+
+    return changeSet;
+}
